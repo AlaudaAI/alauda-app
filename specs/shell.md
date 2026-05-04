@@ -18,7 +18,7 @@ described below.
 +------------------------------------------------------+
 | TopBar                                                |
 | +------+                              +-------------+ |
-| | Logo | BusinessSwitcher (current)   | avatar v    | |
+| | Logo | BusinessSwitcher (current)   | avatar ▼    | |
 | +------+                              +-------------+ |
 +-------------+----------------------------------------+
 | Sidebar     |                                         |
