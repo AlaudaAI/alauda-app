@@ -57,17 +57,17 @@ public token; tiles never proxy through `apps/web`.
 ### Scan creation
 
 1. Browser POSTs `/api/scan` with `{keyword, radius, optional email}`
-2. `apps/web` computes a 5x5 grid, writes one `Scan` and 25 `GridPoint`
-   rows to Neon
+2. `apps/web` computes a 5x5 grid and writes one `Scan` plus 25
+   `GridPoint` rows to Neon
 3. `apps/web` enqueues 25 jobs to Upstash Redis on the BullMQ
    `serp-fetch` queue
 4. `apps/worker` BLPOPs each job and hits Serper / DataForSEO under a
    per-provider rate limit and a token-bucket QPS cap
 5. `apps/worker` writes one `ScanResult` and one `UsageLedger` row per
    job to Neon
-6. The last job triggers an atomic finalizer marker; if the requester
-   opted into email, `apps/worker` calls Resend with the scan-complete
-   template
+6. `apps/worker` triggers the atomic finalizer marker when the last
+   job completes and, if the requester opted into email, calls Resend
+   with the scan-complete template
 7. Browser polls `/api/scan/[id]/status` every 1s and renders results
    when the marker reports done
 
@@ -81,8 +81,9 @@ public token; tiles never proxy through `apps/web`.
 3. The endpoint re-validates each Google review URL, enforces the
    per-business velocity cap, and optimistically claims rows via
    `updateMany`
-4. The endpoint calls the Notifier — Resend for email, Twilio raw HTTPS
-   for SMS
+4. The endpoint calls Resend (email) or Twilio's raw HTTPS
+   `Messages.json` endpoint (SMS) via the inherited `Notifier`
+   abstraction (`src/lib/notifier.ts` from Review_MLP)
 5. Twilio POSTs a status update to `/api/sms/status-callback`; the
    endpoint verifies HMAC-SHA1 and writes `smsDeliveredAt`
 6. On send failure the endpoint rolls back `sentAt` so the row retries
@@ -94,21 +95,20 @@ public token; tiles never proxy through `apps/web`.
 2. `apps/web` calls `signMagicLink(email)` and sends the link via Resend,
    pointing at `/api/auth/verify?token=...&next=...`
 3. User clicks the link in the email
-4. `/api/auth/verify` validates the JWT (15-minute expiry,
-   `purpose:"magic"`), mints a session JWT (30-day,
-   `purpose:"session"`), and writes it as an HttpOnly SameSite=Lax
-   cookie
+4. `/api/auth/verify` exchanges the magic JWT for a session JWT
+   (15-minute magic expiry, 30-day session, HttpOnly SameSite=Lax
+   cookie)
 5. The endpoint 307-redirects to `next` (default `/dashboard`); on
    validation failure it 307-redirects to
    `/login?error=invalid_or_expired`
 
 ## Process inventory
 
-| Process | Host | Trigger | Concurrency |
+| Process | Host | Trigger | Execution model |
 |---|---|---|---|
-| `apps/web` (Next.js) | Vercel | HTTP request | per-request |
-| Vercel Cron | Vercel | every minute | sequential |
-| `apps/worker` | Railway | Redis BLPOP | 25 |
+| `apps/web` (Next.js) | Vercel | HTTP request | per-request (Vercel function) |
+| Vercel Cron | Vercel | every minute | sequential (one tick at a time) |
+| `apps/worker` | Railway | Redis BLPOP | 25 concurrent jobs |
 
 `apps/web` runs as Vercel Functions per request. Vercel Cron is the
 same deployment invoked on schedule, so it shares the `apps/web` build
