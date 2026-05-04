@@ -191,13 +191,17 @@ migration to a unified base.
 
 - Splits deploy targets between Vercel (`apps/web` and the Reviews
   cron) and Railway (`apps/worker` BullMQ consumer).
-- Requires both apps to import the same `@alauda/jobs` package so
-  job-data shapes stay aligned (see
-  [`ops/deployment.md`](../ops/deployment.md)).
+- Requires both apps to import `@alauda/jobs` for SERP plumbing
+  (adapter, rate limit, providers); job-data type definitions live in
+  `@alauda/db` so producer (web) and consumer (worker) share one source
+  of truth — see
+  [ADR-007](#adr-007-flat-prisma-schema-s1) and
+  [`ops/deployment.md`](../ops/deployment.md).
 - Inherits the PR-preview limitation that Railway does not auto-deploy
   preview workers, leaving "create scan" stuck on `queued` in preview
-  environments — a known gap the source repos already work around with
-  local dev.
+  environments. Local dev (`pnpm dev:web` + `pnpm dev:worker`) is the
+  documented workaround when full-stack testing on a PR preview is
+  needed.
 - Leaves Inngest or any other async unification as future work, off the
   blueprint's critical path.
 
@@ -226,7 +230,7 @@ single baseline migration.
   and reusable by future tools (see
   [`ops/database.md`](../ops/database.md)).
 - Resets migration history in `prisma/migrations/` — the first
-  migration is the merged-schema initialisation, not a replay of either
+  migration is the merged-schema initialization, not a replay of either
   source repo's history. Acceptable because alauda-app has no paid
   users to protect.
 - Exports a single `PrismaClient` from `@alauda/db` so `apps/web` and
@@ -261,7 +265,7 @@ sub-domains.
 - Keeps the evolution path open — T3 can become T1 (marketing on the
   same domain) or T2 (sub-domain split) without lock-in, because
   no marketing content has been committed.
-- Simplifies DNS to one A/CNAME record pointing at Vercel.
+- Simplifies DNS to one record at the apex pointing at Vercel.
 - Removes any need for a marketing-stack design system, copywriting
   pipeline, or CMS in the blueprint.
 
@@ -301,12 +305,13 @@ account dropdown sits in the header right and contains only Sign out.
 source repos. The relationship between alauda-app and those repos
 must be defined explicitly so neither side blocks the other.
 
-**Decision:** Run alauda-app as a fully **independent deployment with
-zero shared infrastructure** with the source repos. alauda-app is
-**alpha** — the future Alauda platform, dogfooded internally — while
-`Local_Map_SEO` and `Review_MLP` continue independent development on
-their own production. Sync from upstream is **opportunistic
-cherry-pick**, not a mechanical mirror.
+**Decision:** Run alauda-app on **fully independent infrastructure**,
+with zero shared services between alauda-app and the source repos —
+separate Neon project, Upstash Redis, Twilio number, Resend sender
+domain. alauda-app is **alpha** — the future Alauda platform,
+dogfooded internally — while `Local_Map_SEO` and `Review_MLP` continue
+independent development on their own production. Sync from upstream is
+**opportunistic cherry-pick**, not a mechanical mirror.
 
 **Rejected alternatives:**
 
