@@ -141,7 +141,7 @@ Build the monorepo skeleton plus three packages: `@alauda/db`, `@alauda/auth`, `
   ```
   Open `packages/jobs/package.json` and rename `"name": "@repo/jobs"` to `"name": "@alauda/jobs"`. Update any internal `@repo/jobs` import strings to `@alauda/jobs` with a single ripgrep sweep:
   ```bash
-  rg -l '@repo/jobs' packages/jobs | xargs sed -i '' 's|@repo/jobs|@alauda/jobs|g'
+  rg -l '@repo/jobs' packages/jobs | xargs perl -i -pe 's|\@repo/jobs|\@alauda/jobs|g'
   ```
   Add provenance headers to every source file. PR title: `feat(jobs): lift @alauda/jobs verbatim`.
 
@@ -197,11 +197,11 @@ End-of-phase: `/signup` -> magic link -> `/dashboard` works locally. Sidebar, To
 
 ### Steps
 
-- [ ] Create `apps/web` from the Next.js 14 template, then refactor to the `src/app/` layout.
+- [ ] Create `apps/web` from the Next.js 14 template directly into the `src/app/` layout (the runbook's canonical structure).
   ```bash
-  pnpm create next-app@14 apps/web --typescript --tailwind --eslint --app --no-src-dir
+  pnpm create next-app@14 apps/web --typescript --tailwind --eslint --app --src-dir
   ```
-  Move generated `apps/web/app/` to `apps/web/src/app/`, update `tsconfig.json` `paths` accordingly, and rename the package to `@alauda/web` in `apps/web/package.json`.
+  Rename the package to `@alauda/web` in `apps/web/package.json`. The generated `apps/web/src/app/` is the layout the rest of the runbook assumes — no post-create move is needed.
 
 - [ ] Add workspace deps to `apps/web/package.json`:
   ```json
@@ -223,7 +223,9 @@ End-of-phase: `/signup` -> magic link -> `/dashboard` works locally. Sidebar, To
   ```
   Run `pnpm install` to refresh the lockfile.
 
-- [ ] Add the two route group layouts. `apps/web/src/app/(public)/layout.tsx` is a minimal pass-through (no chrome). `apps/web/src/app/(platform)/layout.tsx` calls `requireOwner()` from `@alauda/auth`, mounts `BusinessProvider`, queries the two onboarding-detection counts (zero `Business` + zero `TrackedBusiness` -> render onboarding), and renders TopBar + Sidebar + children. Implementation contract: [`../specs/shell.md#onboarding-forced-flow`](../specs/shell.md#onboarding-forced-flow).
+- [ ] Add a stub `apps/web/src/components/BusinessProvider.tsx` exporting an empty React Context with a no-op provider and a `useBusiness()` hook returning `null`. The Phase 4 lift replaces this stub with the real `BusinessProvider` ported from Local_Map_SEO. Stubbing now keeps Phase 2's layout import-clean — the layout can mount `<BusinessProvider>` immediately without waiting on Phase 4.
+
+- [ ] Add the two route group layouts. `apps/web/src/app/(public)/layout.tsx` is a minimal pass-through (no chrome). `apps/web/src/app/(platform)/layout.tsx` calls `requireOwner()` from `@alauda/auth`, mounts the stub `BusinessProvider`, queries the two onboarding-detection counts (zero `Business` + zero `TrackedBusiness` -> render onboarding placeholder), and renders TopBar + Sidebar + children. Implementation contract: [`../specs/shell.md#onboarding-forced-flow`](../specs/shell.md#onboarding-forced-flow). The full onboarding component lands in Phase 4.
 
 - [ ] Add `apps/web/src/middleware.ts` composing `@alauda/auth/middleware-helper` with the `?businessId=` cookie promotion logic from `Local_Map_SEO/apps/web/src/middleware.ts`. Allowlist the public pages and APIs per [`../specs/auth.md#public-allowlist`](../specs/auth.md#public-allowlist). Implement the six-step decision tree from [`../specs/auth.md#middleware-decision-tree`](../specs/auth.md#middleware-decision-tree) verbatim. This file's provenance header reads `origin: alauda-app (integration)` because it composes two upstreams; it is not lifted from a single source.
 
@@ -282,9 +284,8 @@ End-of-phase: `pnpm dev:worker` starts and idles on BLPOP. No jobs yet — Phase
 
 - [ ] Update import paths from `@repo/db` to `@alauda/db` and `@repo/jobs` to `@alauda/jobs`. One ripgrep sweep handles both:
   ```bash
-  rg -l '@repo/(db|jobs)' apps/worker | xargs sed -i '' \
-      -e 's|@repo/db|@alauda/db|g' \
-      -e 's|@repo/jobs|@alauda/jobs|g'
+  rg -l '@repo/(db|jobs)' apps/worker | xargs perl -i -pe \
+      's|\@repo/db|\@alauda/db|g; s|\@repo/jobs|\@alauda/jobs|g'
   ```
   Confirm no stragglers:
   ```bash
@@ -362,10 +363,10 @@ End-of-phase: signup -> onboarding -> `/scan/new` -> `/scan/reports/[id]` -> pub
 
   5. Mechanical sweep: rewrite internal links and `redirect()` calls to follow the new namespace. The route renames cascade:
      ```bash
-     rg -l '/seo-map' apps/web | xargs sed -i '' 's|/seo-map|/scan|g'
-     rg -l "/api/scans" apps/web | xargs sed -i '' 's|/api/scans|/api/scan|g'
-     rg -l "/api/business" apps/web | xargs sed -i '' 's|/api/business|/api/scan/business|g'
-     rg -l "from '@/lib/prisma'" apps/web | xargs sed -i '' "s|from '@/lib/prisma'|from '@alauda/db'|g"
+     rg -l '/seo-map' apps/web | xargs perl -i -pe 's|/seo-map|/scan|g'
+     rg -l '/api/scans' apps/web | xargs perl -i -pe 's|/api/scans|/api/scan|g'
+     rg -l '/api/business' apps/web | xargs perl -i -pe 's|/api/business|/api/scan/business|g'
+     rg -l "from '\@/lib/prisma'" apps/web | xargs perl -i -pe "s|from '\@/lib/prisma'|from '\@alauda/db'|g"
      ```
      Run `rg "/seo-map|/api/scans" apps/web` after the sweep — expect zero hits.
 
@@ -380,7 +381,7 @@ End-of-phase: signup -> onboarding -> `/scan/new` -> `/scan/reports/[id]` -> pub
 
 - [ ] Add provenance headers to every lifted file (see [Phase 1-5 universal: provenance comments](#phase-1-5-universal-provenance-comments) below).
 
-- [ ] Implement the onboarding component if it didn't already land in Phase 2. Add `apps/web/src/components/Onboarding.tsx` per [`../specs/shell.md#onboarding-forced-flow`](../specs/shell.md#onboarding-forced-flow). The detection logic in `(platform)/layout.tsx` queries both Reviews `Business` and Scan `TrackedBusiness` counts; if both zero, render `Onboarding` in place of `{children}`. The dual-write transaction creates one `Place`, one `TrackedBusiness`, and one `Business` per [`../architecture/integration-points.md#7-onboarding-dual-write`](../architecture/integration-points.md#7-onboarding-dual-write).
+- [ ] Implement the onboarding component. Add `apps/web/src/components/Onboarding.tsx` per [`../specs/shell.md#onboarding-forced-flow`](../specs/shell.md#onboarding-forced-flow). Wire the detection logic in `(platform)/layout.tsx`: query both Reviews `Business` and Scan `TrackedBusiness` counts; if both zero, render `Onboarding` in place of `{children}`. The dual-write transaction creates one `Place`, one `TrackedBusiness`, and one `Business` per [`../architecture/integration-points.md#7-onboarding-dual-write`](../architecture/integration-points.md#7-onboarding-dual-write). Phase 4 is the unambiguous owner of this component — Phase 2's layout uses an onboarding placeholder until this step replaces it.
 
 ### Verify
 
@@ -470,17 +471,22 @@ End-of-phase: review request creation -> console-mode log -> customer rating pag
 
   6. Mechanical sweep: rewrite namespace-renamed paths and replace deleted-import references:
      ```bash
-     rg -l '/owner/' apps/web | xargs sed -i '' 's|/owner/|/reviews/|g'
-     rg -l "/api/owner" apps/web | xargs sed -i '' 's|/api/owner|/api/reviews|g'
-     rg -l "/api/review-request" apps/web | xargs sed -i '' 's|/api/review-request|/api/reviews/review-request|g'
-     rg -l "from '@/lib/(auth|magic-link|session|token|prisma|env)'" apps/web | \
-        xargs sed -i '' \
-          -e "s|from '@/lib/auth'|from '@alauda/auth'|g" \
-          -e "s|from '@/lib/magic-link'|from '@alauda/auth'|g" \
-          -e "s|from '@/lib/session'|from '@alauda/auth'|g" \
-          -e "s|from '@/lib/token'|from '@alauda/auth'|g" \
-          -e "s|from '@/lib/prisma'|from '@alauda/db'|g" \
-          -e "s|from '@/lib/env'|from '@/env'|g"
+     rg -l '/owner/' apps/web | xargs perl -i -pe 's|/owner/|/reviews/|g'
+     rg -l '/api/owner' apps/web | xargs perl -i -pe 's|/api/owner|/api/reviews|g'
+     rg -l '/api/review-request' apps/web | xargs perl -i -pe 's|/api/review-request|/api/reviews/review-request|g'
+     rg -l "from '\@/lib/(auth|magic-link|session|token|prisma|env)'" apps/web | \
+        xargs perl -i -pe "
+          s|from '\@/lib/auth'|from '\@alauda/auth'|g;
+          s|from '\@/lib/magic-link'|from '\@alauda/auth'|g;
+          s|from '\@/lib/session'|from '\@alauda/auth'|g;
+          s|from '\@/lib/token'|from '\@alauda/auth'|g;
+          s|from '\@/lib/prisma'|from '\@alauda/db'|g;
+          s|from '\@/lib/env'|from '\@/env'|g;
+        "
+     ```
+     The sed-style regex above is now Perl regex; semantics are identical for these literal-string substitutions. The sweep may produce duplicate `from '@alauda/auth'` imports in files that previously imported from multiple Review_MLP lib files. Collapse them with the project's lint autofix:
+     ```bash
+     pnpm --filter @alauda/web lint --fix
      ```
      Run `rg "/owner/|/api/owner|@/lib/(auth|magic-link|session|token|prisma)" apps/web` and expect zero hits.
 
@@ -573,6 +579,8 @@ alauda-app's own production goes live, dogfood-only. NOT a point of no return �
   - Build Command: `pnpm --filter @alauda/db migrate:deploy && pnpm --filter @alauda/web build`
   - Install Command: `pnpm install --frozen-lockfile`
   - Node version: 20
+
+  > **Monorepo detection caveat.** The build command above only works if Vercel checks out the full monorepo (not just `apps/web`). Vercel's monorepo detection turns this on by default when `pnpm-workspace.yaml` exists at the repo root, but verify in the project's "Build & Development Settings" that the full repo is available — if Vercel scopes the checkout to `apps/web`, the `pnpm --filter @alauda/db` invocation cannot resolve `@alauda/db` and the build fails before migrations run.
 
   Fill all env vars per [`../ops/deployment.md#environment-variable-groups`](../ops/deployment.md#environment-variable-groups). Set scope to Production. The required set for `apps/web`: `DATABASE_URL`, `POSTGRES_URL_NON_POOLING`, `REDIS_URL`, `AUTH_SECRET`, `APP_URL=https://alauda.ai`, `RESEND_API_KEY`, `RESEND_FROM=noreply@app.alauda.ai`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `CRON_SECRET`, `ANTHROPIC_API_KEY`, `GOOGLE_PLACES_API_KEY`, `NEXT_PUBLIC_MAPBOX_TOKEN`. Trigger the first build. Verify in Vercel logs:
   - `prisma migrate deploy` runs and reports `1 migration found, 1 applied` (the baseline).
