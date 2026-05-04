@@ -70,10 +70,11 @@ the platform identity, attaching the rate-limit timestamp to
 independent rate-limit windows.
 
 **Resolution:** Move `lastMagicLinkSentAt` from `Business` onto
-`User`. The semantics now match the entity that the rate limit
-protects, and the change falls out of the identity decision rather
-than a redesign — it is a passive consequence of **(A1)**, not a new
-ADR. This is the only integration-layer schema edit auth requires.
+`User` per
+[ADR-004](decisions.md#adr-004-magic-link-auth-in-packagesauth-a1) —
+the semantics now match the entity that the rate limit protects, and
+this is the only integration-layer schema edit auth requires; it is a
+passive consequence of the identity decision, not a new ADR. **(A1)**
 
 **Spec:** [`../specs/auth.md`](../specs/auth.md)
 
