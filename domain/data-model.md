@@ -72,16 +72,14 @@ integration-layer change the merge forces.
 #### TrackedBusiness
 
 - **Origin:** `Local_Map_SEO/packages/db/prisma/schema.prisma`.
-- **Key fields:** `id`, `userId` (FK to `User`,
-  **NOT NULL post-fork-and-lift**), `placeId` (FK to `Place`),
-  `nickname`.
+- **Key fields:** `id`, `userId` (FK to `User`, NOT NULL),
+  `placeId` (FK to `Place`), `nickname`.
 - **Role in alauda-app:** A user-tracked business that Scan operates
   on. One user can track multiple businesses; each tracked business
   has its own scan history.
-- **Integration changes:** `userId` tightens from nullable to NOT NULL.
-  The change was planned in `Local_Map_SEO`'s README and is executed
-  in alauda-app's baseline migration; no backfill is needed because
-  alauda-app starts empty (see
+- **Integration changes:** `userId` tightens from nullable to NOT NULL
+  in the baseline migration; alauda-app starts with no rows so backfill
+  is a no-op (see
   [ADR-007](../architecture/decisions.md#adr-007-flat-prisma-schema-s1)).
 
 #### Scan
@@ -163,8 +161,10 @@ The merge touches exactly three fields. Every other field on every
 other model ships verbatim from its source repo.
 
 - `User` gains `lastMagicLinkSentAt` (nullable timestamp). Populated
-  by `@alauda/auth`. Migrated semantic from
-  `Review_MLP/Business.lastMagicLinkSentAt`.
+  by `@alauda/auth`. Carries the semantic from
+  `Review_MLP/Business.lastMagicLinkSentAt` — moved to `User` because
+  per-User rate-limit is correct now that `User` is the platform
+  identity.
 - `TrackedBusiness.userId` is tightened from nullable to NOT NULL.
   The baseline migration enforces this; no backfill is needed because
   alauda-app starts empty.
@@ -207,12 +207,12 @@ integration-layer changes — `User.lastMagicLinkSentAt`,
 `Business.lastMagicLinkSentAt` — so no follow-up migration is needed
 to reconcile the source-repo shapes.
 
-Future schema changes are written manually per alauda-app, not copied
-from source repos. When a source repo evolves a model, the change
-flows in through the
-[`../plan/sync-strategy.md`](../plan/sync-strategy.md) Phase 7 window:
-the diff is read, an alauda-app migration is authored by hand, and the
-provenance comment on the affected file is updated. Mechanical mirror
-of upstream migrations is explicitly rejected because the integration
-layer (auth bridge, ownership rules, the three field changes above)
-would silently regress.
+Future schema changes flow through **Phase 7 sync**
+([`../plan/sync-strategy.md`](../plan/sync-strategy.md)); migrations
+are written manually per alauda-app, not copied from source repos.
+When a source repo evolves a model, the diff is read, an alauda-app
+migration is authored by hand, and the provenance comment on the
+affected file is updated. Mechanical mirror of upstream migrations is
+explicitly rejected because the integration layer (auth bridge,
+ownership rules, the three field changes above) would silently
+regress.
