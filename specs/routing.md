@@ -149,9 +149,14 @@ app/
   (platform)/
     layout.tsx                        → shell + onboarding gate
     dashboard/page.tsx                → /dashboard
-    scan/{,new,reports,settings}/     → /scan/*
+    scan/page.tsx                     → /scan
+    scan/new/page.tsx                 → /scan/new
+    scan/reports/page.tsx             → /scan/reports
     scan/reports/[id]/page.tsx        → /scan/reports/[id]
-    reviews/{,new,settings}/          → /reviews/*
+    scan/settings/page.tsx            → /scan/settings
+    reviews/page.tsx                  → /reviews
+    reviews/new/page.tsx              → /reviews/new
+    reviews/settings/page.tsx         → /reviews/settings
   api/
     auth/{signup,request,verify}/     → public; magic-link
     r/[token]/{rate,suggest,feedback,google-click}/
