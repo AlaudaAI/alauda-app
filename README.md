@@ -37,9 +37,9 @@ alauda-app/
 ├── README.md                        ← this file
 ├── architecture/
 │   ├── decisions.md                 ← all ADRs (meta principle + 8 decisions + α/isolation + sync)
-│   ├── constants.md                 ← index of inherited operational constants
 │   ├── system-diagram.md            ← mermaid: Next app + Worker + DB + Redis + external services
-│   └── integration-points.md        ← catalog of seams where the two products meet
+│   ├── integration-points.md        ← catalog of seams where the two products meet
+│   └── constants.md                 ← index of inherited operational constants
 ├── domain/
 │   └── data-model.md                ← merged Prisma schema sketch + ER diagram
 ├── specs/
