@@ -10,14 +10,14 @@ Alauda products into a single LocalRank-style Next.js app.
 - **Reviews** runs a Google review request funnel (SMS / Email → rating
   page → AI-drafted review or private feedback), lifted from
   [`AlaudaAI/Review_MLP`](https://github.com/AlaudaAI/Review_MLP).
-- **Reports** is reserved as a sidebar placeholder ("Coming Soon") with
-  no implementation.
+- **Reports** appears as a sidebar placeholder marked "Coming Soon"; no
+  implementation exists.
 
-The reference dashboard form is
-[`app.localrank.so/dashboard`](https://app.localrank.so/dashboard).
-The reference blueprint shape is the first commit of
-[`AlaudaAI/website-rebuild`](https://github.com/AlaudaAI/website-rebuild)
-— pure documentation, zero code.
+alauda-app's dashboard layout follows
+[LocalRank](https://app.localrank.so/dashboard) (login required); the
+documentation-only blueprint shape follows
+[`AlaudaAI/website-rebuild`](https://github.com/AlaudaAI/website-rebuild)'s
+first commit — pure documentation, zero code.
 
 ## What is this directory
 
@@ -25,8 +25,8 @@ This repository is a **documentation blueprint**. It contains no
 application code, no `apps/`, no `packages/`, no migrations — only the
 markdown files that articulate the integration decisions.
 
-Actual implementation (fork & lift the two source repos into a monorepo)
-happens later via the runbook in
+Actual implementation (**fork & lift** the two source repos into a
+monorepo) happens later via the runbook in
 [`plan/fork-and-lift-day.md`](plan/fork-and-lift-day.md), on Jason's
 schedule, with zero disruption to ongoing source-repo development.
 
@@ -36,7 +36,7 @@ schedule, with zero disruption to ongoing source-repo development.
 alauda-app/
 ├── README.md                        ← this file
 ├── architecture/
-│   ├── decisions.md                 ← all ADRs (meta principle + 8 decisions + α/isolation + sync)
+│   ├── decisions.md                 ← all ADRs (meta principle + 8 ADRs + alpha/isolation + sync)
 │   ├── system-diagram.md            ← mermaid: Next app + Worker + DB + Redis + external services
 │   ├── integration-points.md        ← catalog of seams where the two products meet
 │   └── constants.md                 ← index of inherited operational constants
@@ -98,10 +98,12 @@ Every file is hyperlinked in the reading order below.
 - **Agency / multi-location / membership / role model.** alauda-app's
   identity is a flat `User` with owned businesses. Multi-tenant role
   logic does not exist and is not designed here.
-- **Stripe billing, async-base unification (Inngest, BullMQ for
-  Reviews), and any global Settings page.** Each tool keeps its
-  inherited async pattern; no account-level settings exist yet, so no
-  surface is created.
+- **Stripe billing.** Out of scope; deferred until product launch.
+- **Async-base unification.** Out of scope; the W1 ADR keeps BullMQ
+  (Scan) and Vercel Cron (Reviews) coexisting, with Inngest migration
+  left as future work.
+- **Global Settings page.** Out of scope; per-tool settings live under
+  each tool's namespace (`/scan/settings`, `/reviews/settings`).
 - **Marketing site and internal feature redesign.** alauda-app is
   platform integration, not a new product. Internal feature decisions
   (BullMQ choice, Resend choice, AI prompts, env names, etc.) are
