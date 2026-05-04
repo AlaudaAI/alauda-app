@@ -23,7 +23,7 @@ live in code; this index points at the code.
 
 The table below covers every operational constant that integration
 crosses. Auth and Reviews rows point into `Review_MLP`; SERP, BullMQ,
-Place cache, and Scan grid rows point into `Local_Map_SEO`; the Cron
+Place Cache, and Scan Grid rows point into `Local_Map_SEO`; the Cron
 rows point at the existing Vercel Cron wiring in `Review_MLP`.
 
 | Domain | Constant | Source |
@@ -38,11 +38,11 @@ rows point at the existing Vercel Cron wiring in `Review_MLP`.
 | Reviews | velocity cap: `VELOCITY_CAP` env, default 3 per rolling 24h | `Review_MLP/src/lib/scheduling.ts` |
 | Reviews | per-business 30-day dedup window (phone + email hash) | `Review_MLP/src/lib/contact.ts` |
 | Reviews | send window: 9am-9pm CT, jitter 60-180min | `Review_MLP/src/lib/scheduling.ts` |
-| Place cache | 7-day memoization (Place lookup) | `Local_Map_SEO/apps/web/src/app/api/business/select/route.ts` |
+| Place Cache | 7-day memoization (Place lookup) | `Local_Map_SEO/apps/web/src/app/api/business/select/route.ts` |
 | Cron | Vercel Cron cadence: every minute (Pro plan required) | `Review_MLP/vercel.json` |
 | Cron | cron batch size: 10 rows per tick | `Review_MLP/src/app/api/cron/send-reviews/route.ts` |
-| Scan grid | 5x5 grid, 25 points | `Local_Map_SEO/apps/web/src/lib/grid.ts` |
-| Magic-link rate-limit | per-User cooldown via `User.lastMagicLinkSentAt` | `packages/auth` after **fork & lift** (was `Business.lastMagicLinkSentAt` in source) |
+| Scan Grid | 5x5 grid, 25 points | `Local_Map_SEO/apps/web/src/lib/grid.ts` |
+| Magic-Link Rate-Limit | per-User cooldown via `User.lastMagicLinkSentAt` | `alauda-app/packages/auth/src/...` (post-Phase 1 **fork & lift**; was `Review_MLP/src/lib/auth.ts` `Business.lastMagicLinkSentAt` pre-lift) |
 
 The last row is the only constant whose owning module moves during
 integration: the cooldown field is lifted off `Business` and rehomed on
