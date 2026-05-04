@@ -93,11 +93,11 @@ The cookie's `SameSite=Lax` limits the surface further: a cross-site `POST` to t
 The middleware runs on every request that is not a static asset. It is the single chokepoint that converts an unauthed request into a `/login` redirect; nothing downstream of the middleware needs to repeat that check.
 
 ```
-1. matchPublicAllowlist(request.path)         → public hit → next()
-2. matchPublicApiAllowlist(request.path)      → public api → next() (endpoint self-verifies)
-3. getSession(request)                        → null → 307 /login?next=<encoded path>
-4. parseBusinessIdParam(request.url)          → has ?businessId= → write currentBusinessId cookie + 307 sans query
-5. checkBusinessSelection(request, session)   → no currentBusinessId cookie AND path != /dashboard → 307 /dashboard
+1. matchPublicAllowlist(request.path)         -> public hit -> next()
+2. matchPublicApiAllowlist(request.path)      -> public api -> next() (endpoint self-verifies)
+3. getSession(request)                        -> null -> 307 /login?next=<encoded path>
+4. parseBusinessIdParam(request.url)          -> has ?businessId= -> write currentBusinessId cookie + 307 sans query
+5. checkBusinessSelection(request, session)   -> no currentBusinessId cookie AND path != /dashboard -> 307 /dashboard
 6. next()
 ```
 
@@ -179,7 +179,7 @@ Listing them explicitly here is the point of the section — readers should be a
 
 - **JWT library — `jose` HS256.** Symmetric signing keyed on `AUTH_SECRET`; no asymmetric keys, no rotation policy in v1. Review_MLP picked `jose` for its small footprint and edge-runtime compatibility, both of which still apply.
 - **`AUTH_SECRET` env var — 32+ byte random.** Same name, same length requirement. The value is rotated by reissuing it and forcing all sessions to log out, which is acceptable in v1 because the user base is small enough to email through any disruption.
-- **Session cookie name.** Matches Review_MLP's name (whatever it is in `src/lib/session.ts`). This preserves existing semantics so any port-level test or harness pointing at the Review_MLP cookie name keeps working unchanged.
+- **Session cookie name.** Matches Review_MLP's name; see `Review_MLP/src/lib/session.ts` for the literal value. Preserving the name keeps any existing test or harness pointing at the cookie working unchanged across the lift.
 - **Magic-link / session JWT claim shapes (`sub`, `exp`, `purpose`, `iat`).** Verbatim from Review_MLP. The `purpose` claim is the discriminator that prevents a session JWT from being accepted by `verifyMagicLink`, and vice versa.
 - **Resend email template body.** Subject line and link CTA copy carry over unchanged from Review_MLP. The template is plain text plus a single CTA link; no marketing styling, no images. We may revisit copy in a future visual-polish pass but treat it as fixed for v1.
 - **Magic-link rate-limit pattern.** The window length and the comparison rule are inherited; the only change is the column it reads (now `User.lastMagicLinkSentAt` rather than `Business.lastMagicLinkSentAt`). See the next section.
