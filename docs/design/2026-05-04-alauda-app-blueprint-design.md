@@ -93,7 +93,8 @@ alauda-app/
 ├── architecture/
 │   ├── decisions.md              ← All ADRs (meta principle + the 8 decisions + α/isolation + sync strategy)
 │   ├── system-diagram.md         ← Mermaid diagram: Next app + Worker + DB + Redis + external services
-│   └── integration-points.md     ← Catalog of "seams" where the two products meet
+│   ├── integration-points.md     ← Catalog of "seams" where the two products meet
+│   └── constants.md              ← Index of inherited operational constants (auth expiry, BullMQ concurrency, SERP QPS, Reviews velocity cap, Place cache TTL, Vercel Cron cadence) with pointers into source repos
 ├── domain/
 │   └── data-model.md             ← Merged Prisma schema sketch + ER diagram (mermaid)
 ├── specs/
