@@ -242,7 +242,10 @@ model UsageLedger {
 model Business {
   id              String          @id @default(cuid())
   name            String
-  ownerEmail      String          @unique
+  // No @unique here — one signed-in user (matched by email) can own multiple
+  // Reviews businesses (e.g. multi-location owner). The non-unique
+  // @@index([ownerEmail]) below keeps the soft-bridge lookup cheap.
+  ownerEmail      String
   ownerFirstName  String
   // Either googleReviewUrl (override) or googlePlaceId must be set before sending.
   googlePlaceId   String?
@@ -267,6 +270,8 @@ model Business {
   createdAt       DateTime        @default(now())
 
   reviewRequests  ReviewRequest[]
+
+  @@index([ownerEmail])
 }
 
 model ReviewRequest {
