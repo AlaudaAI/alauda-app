@@ -36,6 +36,21 @@ After reading `Local_Map_SEO/apps/web/src/auth.ts` + `middleware.ts` + `signin/*
 - **Cookie**: `alauda.businessId` (alauda-app rename of PR #19's `localmapseo.businessId`). The signIn-time cookie-only adoption block from PR #19 is dropped — alauda-app has no cookie-only legacy users.
 - **`TrackedBusiness.userId` is NOT NULL in alauda-app baseline** — Local_Map_SEO keeps it nullable for cookie-only legacy users; alauda-app has none, so hard FK from Day 1.
 
+## Phase 0 amendment 2026-05-06 — sender-domain consolidation (early)
+
+> **Jason's intent note 2026-05-06**: source repos (Local_Map_SEO, Review_MLP) are expected to fully consolidate into alauda-app over time, not run in parallel forever. This is broader than contexts PR #3 spec lines 28-30 ("eventual sunset is a separate future decision not in scope") — captured here as input for a future Glen ADR; spec text itself unchanged.
+
+Implication for the Phase 0 Resend isolation rule:
+
+- The original "new sender domain — reputation hygiene blast radius" rule is framed for the three-products-coexist case.
+- Under Jason's consolidation trajectory, sender-domain reuse is the *terminal state* alauda-app converges to, not a deviation from it.
+
+Practical effect for Phase 2 sign-in verify (2026-05-06 onward):
+
+- alauda-app reuses Yifan's existing Resend account + verified sender domain (whichever Yifan grants — Local_Map_SEO's or Review_MLP's).
+- `RESEND_API_KEY` + `EMAIL_FROM` come from Yifan; alauda-app's own Resend account (created during the initial Phase 0 attempt against `app.alauda.ai`) is shelved.
+- DNS verification for `app.alauda.ai` is **deferred** until Glen decides the long-term sender-domain story (Phase 6 prep at the latest).
+
 ## Coexistence with source repos (α + isolation)
 
 - **α**: alauda-app is the future Alauda platform. Source repos continue independent development. Their eventual sunset is a separate future decision **not in scope** here.
@@ -73,7 +88,7 @@ These three phases can start before Glen signs off because the underlying ADRs (
 | **Neon Postgres** | New project, PostGIS extension on | ✅ MUST be new |
 | **Upstash Redis** | New instance | ✅ MUST be new |
 | **Twilio** | New phone number (Review_MLP's number stays with its production) | ✅ MUST be new |
-| **Resend** | Same account ok; **new sender domain** (e.g. `noreply@app.alauda.ai`) | New domain only |
+| **Resend** ⚠️ | Same account ok; sender-domain isolation **deferred** (early consolidation — reusing Yifan's domain). See "Phase 0 amendment 2026-05-06 — sender-domain consolidation (early)" above. | Account reused, domain deferred |
 | **Anthropic** | Same key ok | ✅ Reuse |
 | **Google Places** | Same key ok | ✅ Reuse |
 | **Mapbox** | Same token ok | ✅ Reuse |
