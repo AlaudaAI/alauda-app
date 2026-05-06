@@ -1,0 +1,23 @@
+{
+  "name": "@alauda/jobs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./serp": "./src/serp.ts",
+    "./cache-key": "./src/cache-key.ts",
+    "./rate-limit": "./src/rate-limit.ts",
+    "./providers/dataforseo": "./src/providers/dataforseo.ts",
+    "./providers/serper": "./src/providers/serper.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3"
+  }
+}
