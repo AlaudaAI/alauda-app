@@ -132,6 +132,7 @@ If a developer forgets step 2, the preview app will reference a column the DB do
 | Write a custom PrismaClient singleton | Use the one `@alauda/db` exports |
 | Decide what Mapbox / Anthropic / Serper key alauda-app uses | Reuse the source-repo keys (no shared write state) |
 | Reuse Yifan's Neon / Upstash / Twilio number / Resend domain | Provision alauda-app's own (isolation rule) |
+| Scale Scan worker process concurrency past 1 instance | Replace `packages/jobs/src/rate-limit.ts` `TokenBucket` with a Redis-backed limiter first; the in-memory bucket can't enforce QPS across multiple processes (Phase 4+ work) |
 
 ## What NOT to start before Glen signs off
 

@@ -155,7 +155,7 @@ model Scan {
   // nondeterministic. batchOrdinal preserves the user's input order.
   // Nullable so existing single-scan rows don't need a backfill.
   batchOrdinal      Int?
-  // Public share URL `/r/<shareToken>` opens this scan with no auth.
+  // Public share URL `/scan/r/<shareToken>` opens this scan with no auth.
   // Generated at scan creation; cuid is unguessable enough for pilot.
   shareToken        String     @unique @default(cuid())
   // Optional email captured at scan-create time. Worker emails this
@@ -312,7 +312,7 @@ model ReviewRequest {
   // recipient's device. Distinct from sentAt (which only means Twilio
   // accepted the send). Email rows leave this null.
   smsDeliveredAt  DateTime?
-  // Short random slug used in /r/:token URL; unique so lookup is cheap.
+  // Short random slug used in /reviews/r/:token URL; unique so lookup is cheap.
   token           String    @unique
   createdAt       DateTime  @default(now())
 

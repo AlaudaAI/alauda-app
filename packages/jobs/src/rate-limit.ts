@@ -7,6 +7,10 @@
 // rather than rejecting — workers that share the bucket simply queue.
 //
 // Pure logic, no timers held: tokens are replenished lazily at read.
+//
+// SCALING CONSTRAINT: in-memory only. Multi-process workers each get
+// their own bucket — combined outbound = N * qps. Single-instance only
+// until a Redis-backed replacement lands (Phase 4+).
 
 export class TokenBucket {
   private tokens: number;

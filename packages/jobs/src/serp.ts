@@ -72,6 +72,14 @@ export interface RateLimitConfig {
 // bucket and queue up — they never hit the provider above `qps`. Failed
 // attempts that re-enter via BullMQ retries also consume tokens, so a
 // 5xx storm can't burn credits faster than the bucket allows.
+//
+// SCALING CONSTRAINT: the bucket is process-local. With N worker
+// instances each instance gets its own bucket and aggregate outbound
+// traffic = N * qps, which can exceed the provider cap and cause retry
+// storms / unexpected spend. This is correct only while the worker
+// runs single-instance. Before scaling Scan worker concurrency past
+// one process, replace this bucket with a Redis-backed limiter (see
+// the Phase 4+ migration discipline in docs/BLUEPRINT.md).
 export function withRateLimit(
   adapter: SerpAdapter,
   cfg: RateLimitConfig
