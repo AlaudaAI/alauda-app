@@ -20,8 +20,21 @@ Anything Local_Map_SEO or Review_MLP already does (BullMQ, Resend, Vercel Pro pl
 | **R1** | **Public route namespacing**: `/scan/r/[token]` (Scan share) + `/reviews/r/[token]` (Reviews customer rating). Both real routes, no rewrite tricks. | Consistency over SMS-segment savings. |
 | **W1** | **Worker topology unchanged**: BullMQ + Railway for Scan, Vercel Cron for Reviews. Both coexist. | Fork & lift principle: each product keeps its async pattern. |
 | **S1** | **Flat Prisma schema** in `packages/db`. All models in `public`, no multi-schema. PostGIS on. | No model name collisions; multi-schema = unnecessary abstraction. |
-| **T3** | **No marketing site**. `alauda.ai/` redirects by auth state (logged-out → `/login`, logged-in → `/dashboard`). | Marketing content does not exist; landing-page evolution is open and zero-lockin. |
+| **T3** | **No marketing site**. `alauda.ai/` redirects by auth state (logged-out → `/signin`, logged-in → `/dashboard`). | Marketing content does not exist; landing-page evolution is open and zero-lockin. |
 | **Sidebar v2** | **Tools-only sidebar**: Scan / Reviews / Reports (Coming Soon). No global Settings — per-product settings live under each tool. Account dropdown contains Sign out only. | Each tool owns its config; don't create empty surfaces. |
+
+## ADR amendment 2026-05-06 — auth shape reconciled with PR #19 actual
+
+After reading `Local_Map_SEO/apps/web/src/auth.ts` + `middleware.ts` + `signin/*` (main HEAD, includes PR #19 + #20's open-redirect fix), several blueprint assumptions were corrected:
+
+- **No `packages/auth`** — PR #19 keeps auth as a single file `apps/web/src/auth.ts`. alauda-app has only one auth consumer (the web app), so a separate package adds no value. Auth lives at `apps/web/src/auth.ts` to mirror Local_Map_SEO 1:1.
+- **No `auth.config.ts` split** — PR #19's `middleware.ts` does not call NextAuth, so it doesn't need an edge-safe auth config. alauda-app inherits this: middleware does cookie promotion only, page server components call `await auth()` themselves.
+- **No `requireOwner` helper** — PR #19 doesn't have one; pages inline `await auth()` + `redirect("/signin")`. alauda-app starts the same way; abstract later if real duplication shows up.
+- **No Session table** — PR #19 picks JWT session strategy (`session: { strategy: "jwt" }`). PrismaAdapter still owns User + Account + VerificationToken, but no Session table.
+- **Login route is `/signin`**, not `/login`. Verify page: `/signin/check-email`.
+- **Env var names follow PR #19, not NextAuth v5 defaults**: `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` / `RESEND_API_KEY` (reused for the Resend provider) / `EMAIL_FROM` / `WEB_URL` / `AUTH_SECRET`.
+- **Cookie**: `alauda.businessId` (alauda-app rename of PR #19's `localmapseo.businessId`). The signIn-time cookie-only adoption block from PR #19 is dropped — alauda-app has no cookie-only legacy users.
+- **`TrackedBusiness.userId` is NOT NULL in alauda-app baseline** — Local_Map_SEO keeps it nullable for cookie-only legacy users; alauda-app has none, so hard FK from Day 1.
 
 ## Coexistence with source repos (α + isolation)
 
@@ -34,11 +47,12 @@ Anything Local_Map_SEO or Review_MLP already does (BullMQ, Resend, Vercel Pro pl
 ```
 alauda-app/
 ├── apps/
-│   ├── web/                       ← Single Next.js 14 app (拓扑 1)
+│   ├── web/                       ← Single Next.js 14 app (拓扑 1).
+│   │                                Auth lives in `src/auth.ts` single-file (PR #19 模式),
+│   │                                NOT a separate `packages/auth` (no second consumer).
 │   └── worker/                    ← BullMQ consumer on Railway. Lifted from Local_Map_SEO/apps/worker.
 ├── packages/
-│   ├── db/                        ← S1 flat Prisma schema (User + Account + Session + VerificationToken from PR #19, plus Scan + Reviews models)
-│   ├── auth/                      ← A1 NextAuth v5, lifted from Local_Map_SEO PR #19
+│   ├── db/                        ← S1 flat Prisma schema (User + Account + VerificationToken from PR #19, plus Scan + Reviews models). JWT mode = no Session table.
 │   └── jobs/                      ← Lifted from Local_Map_SEO/packages/jobs
 ├── pnpm-workspace.yaml
 ├── pnpm-lock.yaml
@@ -69,49 +83,51 @@ These three phases can start before Glen signs off because the underlying ADRs (
 - [ ] `.env.example` populated with var names from Local_Map_SEO PR #19 (see `.env.example` in repo root)
 - [ ] Sanity check: connect to Neon dev branch, ping Upstash, verify Twilio number can send/receive
 
-### Phase 1 — monorepo skeleton + 3 packages
+### Phase 1 — monorepo skeleton + 2 packages
 
 - [ ] Scaffold: `pnpm-workspace.yaml`, root `package.json`, `tsconfig.base.json`, empty `apps/`, `packages/`
 - [ ] **`@alauda/db`** = copy `Local_Map_SEO/packages/db` verbatim
-  - PR #19's User + Account + Session + VerificationToken models are **already baked in** — do not redesign
+  - PR #19's User + Account + VerificationToken models are **already baked in** — do not redesign (JWT mode = no Session table)
   - Append `Business` + `ReviewRequest` from `Review_MLP/prisma/schema.prisma`
   - Drop `Business.lastMagicLinkSentAt` (NextAuth handles rate-limit; field obsolete)
+  - alauda-app starts with `TrackedBusiness.userId` **NOT NULL** from baseline (no cookie-only legacy users to migrate)
   - Delete `prisma/migrations/`; run `pnpm prisma migrate dev --name baseline` for single baseline
   - Rename `@repo/db` → `@alauda/db` in package.json
 - [ ] **`@alauda/jobs`** = `Local_Map_SEO/packages/jobs` verbatim, rename `@repo/jobs` → `@alauda/jobs`
-- [ ] **`@alauda/auth`** (NextAuth v5, lifted from Local_Map_SEO PR #19):
-  - Copy `auth.ts` (root config) + `auth.config.ts` (edge-safe providers + callbacks) from PR #19 into `packages/auth/src/`
-  - Add `packages/auth/src/require-owner.ts` — alauda-app convenience: calls `auth()`, redirects to `/login` if null
-  - `packages/auth/src/index.ts` — one file, re-exports `{ auth, signIn, signOut, handlers, requireOwner }`
-  - `packages/auth/package.json` — name `@alauda/auth`, deps: `next-auth@5`, `@auth/prisma-adapter`, `resend`
+- [ ] **No `packages/auth`** — auth lives single-file at `apps/web/src/auth.ts`, lifted in Phase 2 (PR #19 mirrors this layout exactly; only consumer is the web app, no need for a package)
 - [ ] Verify: `pnpm install && pnpm typecheck` clean, no `@repo/*` left over
 
 ### Phase 2 — apps/web shell + sign-in
 
-- [ ] Next.js 14 skeleton at `apps/web` (App Router, TypeScript, Tailwind matching PR #19)
-- [ ] `apps/web/src/app/(public)/layout.tsx` — minimal no-chrome layout
-- [ ] `apps/web/src/app/(public)/login/page.tsx` — lifted from PR #19; calls `signIn` from `@alauda/auth`
-- [ ] `apps/web/src/app/api/auth/[...nextauth]/route.ts` — one line:
-  ```ts
-  export { GET, POST } from "@alauda/auth"  // re-export NextAuth handlers
-  ```
-- [ ] `apps/web/middleware.ts` — wrap NextAuth's `auth` middleware export, layer Local_Map_SEO's `?businessId=` cookie promotion logic (also lifted from PR #19) on top. **Read PR #19's `apps/web/middleware.ts` source first**: copy the cookie name (`currentBusinessId`) and any helper imports verbatim. Do NOT invent a cookie name or session strategy — both are inherited from PR #19's config.
-- [ ] `apps/web/src/app/(platform)/layout.tsx` — sidebar + topbar shell (stubs ok), `requireOwner()` gate, onboarding-detection placeholder
-- [ ] Shell stubs: TopBar / Sidebar v2 (3 items: Scan / Reviews / Reports-soon) / BusinessSwitcher (empty list ok) / UserDropdown (Sign out only)
-- [ ] Route stubs: `/` redirect by auth state, `/login`, `/dashboard` (blank ok)
+> **Lift strategy: zero-original-code.** `auth.ts`, `middleware.ts`, `business-cookie.ts`, `signin/*` pages, the `[...nextauth]/route.ts` handler — all lifted from `Local_Map_SEO/apps/web/src/` to the same paths in alauda-app. Mechanical edits only: `@repo/db` → `@alauda/db`, cookie name renamed (see below), drop the cookie-only-business adoption block in the `signIn` callback (alauda-app has no cookie-only legacy users to adopt).
 
-**Verify**: `pnpm dev:web` → `/login` → either Google OAuth or magic-link email → land at `/dashboard` (blank acceptable). **At end of Phase 2, sign-in is fully functional and final** (no rework needed later).
+- [ ] Next.js 14 skeleton at `apps/web` (App Router, TypeScript, Tailwind matching PR #19)
+- [ ] `apps/web/src/auth.ts` — lifted verbatim from `Local_Map_SEO/apps/web/src/auth.ts` (single-file PR #19 + #20 mode). `@repo/db` → `@alauda/db`. Drop the cookie-only adoption block in `signIn`.
+- [ ] `apps/web/src/lib/business-cookie.ts` — lifted verbatim, but **rename the cookie value**: `localmapseo.businessId` → `alauda.businessId`.
+- [ ] `apps/web/src/app/(public)/layout.tsx` — minimal no-chrome layout
+- [ ] `apps/web/src/app/(public)/signin/{page.tsx, SignInForm.tsx, check-email/page.tsx}` — lifted verbatim from PR #19 + #20 (PR #20's `safeCallback` open-redirect fix is included in main HEAD)
+- [ ] `apps/web/src/app/api/auth/[...nextauth]/route.ts` — PR #19 actual:
+  ```ts
+  import { handlers } from "@/auth";
+  export const { GET, POST } = handlers;
+  ```
+- [ ] `apps/web/src/middleware.ts` — lifted verbatim. **Do NOT** wrap NextAuth's `auth` middleware export; PR #19 keeps middleware to plain cookie promotion (`?businessId=` → cookie). Page-level auth is enforced by `(platform)` server components calling `await auth()` themselves and redirecting to `/signin` if null.
+- [ ] `apps/web/src/app/(platform)/layout.tsx` — sidebar + topbar shell (stubs ok), inline `await auth()` + `if (!session) redirect("/signin")` gate (no `requireOwner` helper — match PR #19), onboarding-detection placeholder
+- [ ] Shell stubs: TopBar / Sidebar v2 (3 items: Scan / Reviews / Reports-soon) / BusinessSwitcher (empty list ok) / UserDropdown (Sign out only)
+- [ ] Route stubs: `/` redirect by auth state, `/signin`, `/dashboard` (blank ok)
+
+**Verify**: `pnpm dev:web` → `/signin` → either Google OAuth or magic-link email → land at `/dashboard` (blank acceptable). **At end of Phase 2, sign-in is fully functional and final** (no rework needed later).
 
 ## Don't-duplicate guardrails (hard rules)
 
 | ❌ DON'T | ✅ DO |
 |---|---|
-| Write a new NextAuth config | Lift `auth.ts` + `auth.config.ts` from Local_Map_SEO PR #19 verbatim |
-| Design a custom User schema | Adopt PR #19's User + Account + Session + VerificationToken as-is |
+| Write a new NextAuth config | Lift `apps/web/src/auth.ts` (single-file, PR #19 + #20 actual) verbatim |
+| Design a custom User schema | Adopt PR #19's User + Account + VerificationToken as-is (no Session table; JWT mode) |
 | Add a `lastMagicLinkSentAt` rate-limit field | NextAuth + Resend provider's built-in rate limit is enough |
-| Write custom session middleware | Wrap NextAuth's `auth` middleware export |
-| Customize cookie name / session strategy (database vs JWT) / Resend env name | Inherit from PR #19's `auth.config.ts` + `middleware.ts`; read source, don't redecide. NextAuth v5 defaults to JWT but PR #19 may have picked database — go look |
-| Build a `/login` UI from scratch | Lift PR #19's `/login` page |
+| Wrap NextAuth's `auth` middleware in `middleware.ts` | PR #19 doesn't — keeps middleware to cookie promotion only; page server components call `await auth()` themselves |
+| Customize cookie name / session strategy / Google or Resend env name | Inherit from PR #19's `auth.ts` + `middleware.ts`; read source, don't redecide. **PR #19 actual**: `session: { strategy: "jwt" }`; env names `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` / `RESEND_API_KEY` / `EMAIL_FROM` / `WEB_URL` / `AUTH_SECRET` |
+| Build a `/signin` UI from scratch | Lift PR #19's `/signin` page (already includes PR #20's open-redirect fix) |
 | Keep `/signup` route or `/api/auth/{request,verify,signup}` legacy paths | Use NextAuth's catch-all `/api/auth/[...nextauth]`; PrismaAdapter creates User implicitly on first sign-in |
 | Write a custom PrismaClient singleton | Use the one `@alauda/db` exports |
 | Decide what Mapbox / Anthropic / Serper key alauda-app uses | Reuse the source-repo keys (no shared write state) |
@@ -154,9 +170,9 @@ This header is the only mechanical artifact that makes Phase 7 sync work without
 - **soft bridge** — Reviews ownership = `Business.ownerEmail = currentUser.email` at runtime; no foreign key
 - **hard FK** — Scan ownership = `TrackedBusiness.userId = currentUser.id` at the schema level (NOT NULL post-baseline)
 - **dual-write** — onboarding creates one `Business` (Reviews) + one `TrackedBusiness` (Scan) sharing one `Place`
-- **public allowlist** — middleware-skipped paths: `/`, `/login`, `/scan/r/*`, `/reviews/r/*`, `/api/auth/*`, `/api/r/*`, `/api/cron/*`, `/api/sms/*`, static assets
+- **public allowlist** — middleware-skipped paths: `/`, `/signin`, `/scan/r/*`, `/reviews/r/*`, `/api/auth/*`, `/api/r/*`, `/api/cron/*`, `/api/sms/*`, static assets
 - **NextAuth callback flow** — sign-in → `/api/auth/callback/{google|resend}` → session cookie → redirect to `next` (default `/dashboard`)
-- **`currentBusinessId` cookie** — written by NextAuth's `signIn` callback (lifted from PR #19) and by middleware on `?businessId=` query promotion
+- **`alauda.businessId` cookie** — written by middleware on `?businessId=` query promotion (lifted verbatim from PR #19's `apps/web/src/middleware.ts`). Renamed from PR #19's `localmapseo.businessId`. The signIn-time cookie-only adoption block from PR #19 is **dropped** (alauda-app has no cookie-only legacy users)
 
 ## Useful agent commands (gstack)
 
