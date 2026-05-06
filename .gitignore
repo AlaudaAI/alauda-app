@@ -1,0 +1,37 @@
+# origin: AlaudaAI/Local_Map_SEO@bd17057:.gitignore
+# last-synced: 2026-05-06
+node_modules
+.pnpm-store
+
+# Build output
+.next
+dist
+build
+out
+.turbo
+*.tsbuildinfo
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# Prisma
+packages/db/prisma/.tmp
+.vercel
+.env*.local

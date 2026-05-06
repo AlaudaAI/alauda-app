@@ -1,0 +1,325 @@
+// alauda-app — flat Prisma schema (S1 ADR).
+//
+// Lifted from:
+//   - AlaudaAI/Local_Map_SEO@bd17057:packages/db/prisma/schema.prisma
+//     (User + Account + VerificationToken from PR #19, Place, TrackedBusiness,
+//     Scan, GridPoint, ScanResult, UsageLedger)
+//   - AlaudaAI/Review_MLP@697383d:prisma/schema.prisma
+//     (Business + ReviewRequest; Business.lastMagicLinkSentAt dropped — see
+//     BLUEPRINT.md ADR amendment, NextAuth + Resend handle rate limit)
+// last-synced: 2026-05-06
+//
+// Identity & ownership model:
+//   User             — NextAuth-managed (PR #19). Hard FK target for TrackedBusiness.
+//   Place            — canonical Google entity, deduped by `googlePlaceId`. Shared.
+//   TrackedBusiness  — Scan-side reference to a Place. `userId` is NOT NULL on the
+//                      alauda-app baseline (Local_Map_SEO keeps it nullable for
+//                      cookie-only legacy users; alauda-app has none).
+//   Business         — Reviews-side. Soft bridge to User via runtime
+//                      `Business.ownerEmail = currentUser.email` (no FK).
+//
+// dual-write (onboarding, Phase 5): one Place + one TrackedBusiness + one Business
+// covering the same Google place. Cross-model FK between Business <-> Place / User
+// is intentionally NOT added at the schema level here — Phase 1 keeps Reviews-side
+// models verbatim, Phase 5 wires the relationship when Reviews business code lifts.
+//
+// Geometry columns use PostGIS `geography(Point, 4326)`. Prisma has no native
+// type for it; we use `Unsupported(...)` and write via raw SQL. GIST indexes
+// added in the manual migration that enables PostGIS.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+  // Vercel's serverless runtime is rhel-openssl-3.0.x.
+  binaryTargets   = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("POSTGRES_URL_NON_POOLING")
+  extensions = [postgis]
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts          Account[]
+  trackedBusinesses TrackedBusiness[]
+}
+
+// NextAuth Account — one row per (provider, providerAccountId). Lets a
+// single User have multiple sign-in methods (Google + magic link, etc.).
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+// NextAuth VerificationToken — magic-link tokens. Short-lived (15min default
+// per NextAuth); deleted on use.
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Canonical Google place. One row per `googlePlaceId`; reused across users.
+model Place {
+  id                     String   @id @default(cuid())
+  googlePlaceId          String   @unique
+  name                   String
+  formattedAddress       String?
+  lat                    Float
+  lng                    Float
+  googleBusinessType     String?
+  googleEditorialSummary String?
+  // Cache of Anthropic-generated keyword suggestions:
+  //   { keywords: string[], generatedAt: string }
+  // Refreshed lazily by /api/keyword-suggestions if older than 30 days.
+  suggestedKeywords      Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  trackedBy TrackedBusiness[]
+
+  @@index([createdAt])
+}
+
+// A user's reference to a Place. `userId` is NOT NULL on the alauda-app baseline
+// (Local_Map_SEO keeps it nullable for cookie-only legacy users; alauda-app has none).
+model TrackedBusiness {
+  id        String   @id @default(cuid())
+  placeId   String
+  place     Place    @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String?
+  createdAt DateTime @default(now())
+
+  scans Scan[]
+
+  @@unique([userId, placeId])
+  @@index([userId])
+}
+
+enum ScanStatus {
+  pending
+  running
+  complete
+  failed
+}
+
+// One run of "scan keyword X around tracked business Y on a grid".
+model Scan {
+  id                String     @id @default(cuid())
+  trackedBusinessId String
+  trackedBusiness   TrackedBusiness @relation(fields: [trackedBusinessId], references: [id], onDelete: Cascade)
+  keyword           String
+  centerLat         Float
+  centerLng         Float
+  center            Unsupported("geography(Point, 4326)")?
+  radiusMeters      Int
+  gridSize          Int        @default(5)
+  status            ScanStatus @default(pending)
+  // Multi-keyword scans created from one form submission share a batchId.
+  // The KeywordSwitcher floating panel on the report page reads siblings
+  // via `WHERE batchId = ?`. Null for single-keyword scans.
+  batchId           String?
+  // Position within the batch, set from the keyword loop index in
+  // /api/scans. All scans in a multi-keyword submission are inserted in
+  // one $transaction, so Postgres now() ties every row's createdAt to
+  // the transaction start — ordering siblings by createdAt is therefore
+  // nondeterministic. batchOrdinal preserves the user's input order.
+  // Nullable so existing single-scan rows don't need a backfill.
+  batchOrdinal      Int?
+  // Public share URL `/scan/r/<shareToken>` opens this scan with no auth.
+  // Generated at scan creation; cuid is unguessable enough for pilot.
+  shareToken        String     @unique @default(cuid())
+  // Optional email captured at scan-create time. Worker emails this
+  // address when the scan settles. Null = no notification.
+  notificationEmail   String?
+  notificationSentAt  DateTime?
+  createdAt         DateTime   @default(now())
+  completedAt       DateTime?
+
+  gridPoints GridPoint[]
+
+  @@index([trackedBusinessId, createdAt])
+  @@index([status])
+  @@index([batchId])
+}
+
+enum GridPointStatus {
+  pending
+  running
+  complete
+  failed
+}
+
+model GridPoint {
+  id        String          @id @default(cuid())
+  scanId    String
+  scan      Scan            @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  idx       Int
+  lat       Float
+  lng       Float
+  location  Unsupported("geography(Point, 4326)")?
+  status    GridPointStatus @default(pending)
+  createdAt DateTime        @default(now())
+
+  result ScanResult?
+
+  @@unique([scanId, idx])
+  @@index([scanId, status])
+}
+
+enum BusinessState {
+  ranked
+  beyond_20
+  not_found
+}
+
+model ScanResult {
+  id            String        @id @default(cuid())
+  gridPointId   String        @unique
+  gridPoint     GridPoint     @relation(fields: [gridPointId], references: [id], onDelete: Cascade)
+  provider      String
+  businessState BusinessState
+  businessRank  Int?
+  competitors   Json
+  cacheKey      String
+  fetchedAt     DateTime      @default(now())
+
+  @@index([cacheKey])
+  @@index([fetchedAt])
+}
+
+model UsageLedger {
+  id          String   @id @default(cuid())
+  scanId      String?
+  gridPointId String?
+  delta       Int
+  reason      String
+  createdAt   DateTime @default(now())
+
+  @@index([scanId])
+  @@index([createdAt])
+}
+
+// =============================================================================
+// Reviews product models — lifted from
+//   AlaudaAI/Review_MLP@697383d:prisma/schema.prisma
+// Lift edits:
+//   - dropped `Business.lastMagicLinkSentAt` (NextAuth + Resend handle rate-limit;
+//     field obsolete; matches Local_Map_SEO PR #19 decision)
+//   - kept all other fields verbatim
+//   - User/Place FK association deferred to Phase 5 (onboarding dual-write)
+// =============================================================================
+
+model Business {
+  id              String          @id @default(cuid())
+  name            String
+  // No @unique here — one signed-in user (matched by email) can own multiple
+  // Reviews businesses (e.g. multi-location owner). The non-unique
+  // @@index([ownerEmail]) below keeps the soft-bridge lookup cheap.
+  ownerEmail      String
+  ownerFirstName  String
+  // Either googleReviewUrl (override) or googlePlaceId must be set before sending.
+  googlePlaceId   String?
+  googleReviewUrl String?
+  // Localized "Hair salon" / "Coffee shop" string from the Places API result,
+  // saved alongside googlePlaceId. Fed into the AI review prompt so drafts use
+  // type-appropriate vocabulary instead of generic "great service" filler.
+  googleBusinessType String?
+  // Google's editorial one-liner about the business (when Places has it),
+  // also fed into the AI review prompt for grounding.
+  googleEditorialSummary String?
+  // Owner-written 1-2 sentence description, fed into the AI prompt as the most
+  // authoritative grounding (the owner knows their own business better than
+  // Google's auto-classification). Plain text, max ~500 chars enforced at API.
+  ownerDescription String?
+  // Per-business override for the AI review system prompt. Set via SQL only
+  // — no UI. When non-null, replaces the default SYSTEM_PROMPT entirely.
+  // Used to give a specific customer a fully customized review-style.
+  aiPromptOverride String?
+  // Optional per-business SMS body override.
+  smsTemplate     String?
+  createdAt       DateTime        @default(now())
+
+  reviewRequests  ReviewRequest[]
+
+  @@index([ownerEmail])
+}
+
+model ReviewRequest {
+  id              String    @id @default(cuid())
+  businessId      String
+  // Delivery channel chosen at create time: 'sms' or 'email'.
+  // Default is 'sms' for legacy rows created before the channel column existed;
+  // new rows always set this explicitly in the review-request API.
+  deliveryChannel String    @default("sms")
+  // Populated when deliveryChannel='sms'. E.164 format, e.g. +15125551234.
+  clientPhoneE164 String?
+  // SHA-256 of clientPhoneE164 for dedup lookup without exposing PII in queries/logs.
+  clientPhoneHash String?
+  // Populated when deliveryChannel='email'. Lowercased, trimmed.
+  clientEmail     String?
+  // SHA-256 of clientEmail for dedup lookup symmetry with phone.
+  clientEmailHash String?
+  scheduledSendAt DateTime
+  sentAt          DateTime?
+  clickedAt       DateTime?
+  ratedAt         DateTime?
+  rating          Int?
+  // Client-entered text: their optional note in the rating step. Also feeds
+  // the AI generator below as a hint for the suggested Google review.
+  reviewText      String?
+  // AI-generated draft Google review shown in the 4-5★ paste view. Cached so
+  // refreshes don't burn another Claude call. Null until first generation.
+  aiSuggestedReview String?
+  // 'google' | 'private' — set at rating time based on star count.
+  routedTo        String?
+  googleClickedAt DateTime?
+  // Set when the owner has been emailed about a private-feedback submission.
+  feedbackSubmittedAt DateTime?
+  optedOut        Boolean   @default(false)
+  // Twilio SID once real SMS provider is wired in.
+  smsSid          String?
+  // Set when Twilio's status callback reports the SMS as delivered to the
+  // recipient's device. Distinct from sentAt (which only means Twilio
+  // accepted the send). Email rows leave this null.
+  smsDeliveredAt  DateTime?
+  // Short random slug used in /reviews/r/:token URL; unique so lookup is cheap.
+  token           String    @unique
+  createdAt       DateTime  @default(now())
+
+  business        Business  @relation(fields: [businessId], references: [id])
+
+  @@index([clientPhoneHash])
+  @@index([clientEmailHash])
+  @@index([scheduledSendAt, sentAt])
+  @@index([businessId, createdAt])
+}
