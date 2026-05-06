@@ -1,11 +1,11 @@
 // origin: AlaudaAI/Local_Map_SEO@bd17057:apps/web/src/auth.ts
 // last-synced: 2026-05-06
 //
-// alauda-app deltas (per BLUEPRINT.md ADR amendment 2026-05-06):
+// alauda-app deltas:
 //   - import `@alauda/db` instead of `@repo/db`
-//   - signIn callback's cookie-only TrackedBusiness adoption block dropped
-//     (alauda-app has no cookie-only legacy users to migrate); jwt + session
-//     callbacks kept verbatim.
+//   - PR #19's `signIn` callback dropped (its only logic was cookie-only
+//     TrackedBusiness adoption for legacy users; alauda-app has none)
+//   - `jwt` + `session` callbacks kept verbatim
 
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
