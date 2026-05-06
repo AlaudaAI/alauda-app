@@ -73,7 +73,7 @@ These three phases can start before Glen signs off because the underlying ADRs (
 | **Neon Postgres** | New project, PostGIS extension on | ✅ MUST be new |
 | **Upstash Redis** | New instance | ✅ MUST be new |
 | **Twilio** | New phone number (Review_MLP's number stays with its production) | ✅ MUST be new |
-| **Resend** | Same account ok; new sender domain `hi@send.alauda.ai` (alauda.ai subdomain provisioned by Yifan in his Resend account using his GoDaddy access). Domain-level isolation ✓; API key shared with Yifan's account at Phase 2 — rotate later (ALA-170, hygiene). | New domain ✓; account shared |
+| **Resend** | Same account ok; new sender domain `hi@send.alauda.ai` (alauda.ai subdomain provisioned by Yifan in his Resend account using his GoDaddy access). Domain-level isolation ✓; API key shared with Yifan's account at Phase 2. | New domain ✓; account shared |
 | **Anthropic** | Same key ok | ✅ Reuse |
 | **Google Places** | Same key ok | ✅ Reuse |
 | **Mapbox** | Same token ok | ✅ Reuse |
