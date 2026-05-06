@@ -105,6 +105,19 @@ These three phases can start before Glen signs off because the underlying ADRs (
 
 **Verify**: `pnpm dev:web` → `/signin` → either Google OAuth or magic-link email → land at `/dashboard` (blank acceptable). **At end of Phase 2, sign-in is fully functional and final** (no rework needed later).
 
+## Migration discipline (until Phase 6 deploy automation lands)
+
+The Vercel build script does **not** run `prisma migrate deploy` — schema changes are applied by the developer before pushing:
+
+1. Add a Prisma model change to `packages/db/prisma/schema.prisma`.
+2. Run `pnpm --filter @alauda/db migrate -- --name <change_name>` locally to generate + apply the migration against the shared Neon dev branch.
+3. Commit the migration file + schema change together.
+4. Push. Vercel preview just compiles app code; the Neon DB is already up-to-date.
+
+Why no auto-deploy: Phase 0-2 has dev / preview / prod sharing one Neon branch (Vercel-Neon integration default). Auto-applying migrations on every Vercel build would let preview deploys mutate the same DB the production app uses, race on migration locks under concurrent builds, and apply schema before the new app version goes live. Phase 6 introduces a separate prod-only deploy step that runs `prisma migrate deploy` after the app deploys cleanly.
+
+If a developer forgets step 2, the preview app will reference a column the DB doesn't have and the route will 500 at runtime. That's the intended fast-fail signal — better than silent schema drift between local and production.
+
 ## Don't-duplicate guardrails (hard rules)
 
 | ❌ DON'T | ✅ DO |

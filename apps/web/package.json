@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "dotenv -e ../../.env -- next dev",
-    "build": "pnpm --filter @alauda/db generate:ci && pnpm --filter @alauda/db migrate:deploy:ci && next build",
+    "build": "pnpm --filter @alauda/db generate:ci && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
