@@ -1,0 +1,62 @@
+// Shared Prisma schema — same shape applied to each app's independent DB.
+//
+// Apps run `prisma migrate dev --schema=../../packages/db/prisma/schema.prisma`
+// from their own directory, picking up their .env.local's DATABASE_URL.
+// Each app gets its own .db file (sqlite) with the same tables. Three
+// independent user tables, zero data crossing.
+//
+// To switch to Supabase / Postgres later: change provider to "postgresql",
+// add directUrl line, update each app's DATABASE_URL to a real Supabase
+// connection string. No schema body change needed.
+//
+// NextAuth v5 needs: User, Account, Session (optional with JWT), VerificationToken.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
