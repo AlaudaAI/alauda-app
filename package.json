@@ -1,0 +1,24 @@
+{
+  "name": "alauda-app",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@9.12.3",
+  "scripts": {
+    "dev:base": "pnpm --filter @alauda/base dev",
+    "dev:sub-a": "pnpm --filter @alauda/sub-a dev",
+    "dev:sub-b": "pnpm --filter @alauda/sub-b dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "db:push:base": "pnpm --filter @alauda/base db:push",
+    "db:push:sub-a": "pnpm --filter @alauda/sub-a db:push",
+    "db:push:sub-b": "pnpm --filter @alauda/sub-b db:push",
+    "db:push:all": "pnpm db:push:base && pnpm db:push:sub-a && pnpm db:push:sub-b"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  }
+}

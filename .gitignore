@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.turbo/
+.DS_Store
+*.log
+.env
+.env.local
+.env.*.local
+*.tsbuildinfo
+
+# Prisma client output (generated locally per app)
+packages/db/node_modules/.prisma/
+**/node_modules/.prisma/
+
+# SQLite demo databases (per-app dev.db)
+*.db
+*.db-journal
